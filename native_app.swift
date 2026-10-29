@@ -3,6 +3,9 @@ import AppKit
 class AppDelegate: NSObject, NSApplicationDelegate {
     var window: NSWindow!
     var textView: NSTextView!
+    var regionPopUp: NSPopUpButton!
+    var browserPopUp: NSPopUpButton!
+    var pLabel: NSTextField!
     var postcodeField: NSTextField!
     var radiusField: NSTextField!
     var intervalField: NSTextField!
@@ -44,27 +47,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         
-        let rect = NSRect(x: 100, y: 100, width: 840, height: 680)
+        let rect = NSRect(x: 100, y: 100, width: 850, height: 720)
         window = NSWindow(
             contentRect: rect,
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
-        window.title = "Apple UK Stock Monitor"
-        window.minSize = NSSize(width: 800, height: 500)
+        window.title = "Apple Stock Monitor — Multi-Region (UK & US)"
+        window.minSize = NSSize(width: 820, height: 540)
         window.center()
         
         let content = NSView()
         window.contentView = content
         
         // 1. Header
-        let title = NSTextField(labelWithString: "🍏 Apple UK Stock Monitor")
+        let title = NSTextField(labelWithString: "🍏 Apple Stock Monitor")
         title.font = NSFont.boldSystemFont(ofSize: 18)
         title.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(title)
         
-        let sub = NSTextField(labelWithString: "Multi-Storage & Colour Search • Auto-opens Firefox & sends Discord alerts on stock")
+        let sub = NSTextField(labelWithString: "UK & US Support • Firefox, Safari & Chrome • Multi-Model Search • Instant Alerts")
         sub.font = NSFont.systemFont(ofSize: 11)
         sub.textColor = .secondaryLabelColor
         sub.translatesAutoresizingMaskIntoConstraints = false
@@ -72,14 +75,52 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         // 2. Settings Box (Responsive)
         let box = NSBox()
-        box.title = "Search Parameters, Models & Phone Alerts"
+        box.title = "Search Parameters, Region, Browser & Alerts"
         box.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(box)
         
         let bContent = box.contentView!
         
-        // --- Row 1: Location & Cadence Controls ---
-        let pLabel = NSTextField(labelWithString: "Postcode:")
+        // --- Row 1: Region, Browser & Main Controls ---
+        let regionLabel = NSTextField(labelWithString: "Region:")
+        regionLabel.font = NSFont.boldSystemFont(ofSize: 12)
+        regionLabel.translatesAutoresizingMaskIntoConstraints = false
+        bContent.addSubview(regionLabel)
+        
+        regionPopUp = NSPopUpButton(frame: .zero, pullsDown: false)
+        regionPopUp.addItems(withTitles: ["🇬🇧 UK (United Kingdom)", "🇺🇸 US (United States)"])
+        regionPopUp.target = self
+        regionPopUp.action = #selector(regionChanged)
+        regionPopUp.translatesAutoresizingMaskIntoConstraints = false
+        bContent.addSubview(regionPopUp)
+        
+        let browserLabel = NSTextField(labelWithString: "Browser:")
+        browserLabel.font = NSFont.boldSystemFont(ofSize: 12)
+        browserLabel.translatesAutoresizingMaskIntoConstraints = false
+        bContent.addSubview(browserLabel)
+        
+        browserPopUp = NSPopUpButton(frame: .zero, pullsDown: false)
+        browserPopUp.addItems(withTitles: ["Firefox", "Safari", "Google Chrome", "Default Browser"])
+        browserPopUp.translatesAutoresizingMaskIntoConstraints = false
+        bContent.addSubview(browserPopUp)
+        
+        startBtn = NSButton(title: "▶ Start Monitoring", target: self, action: #selector(toggleMonitoring))
+        startBtn.bezelStyle = .rounded
+        startBtn.translatesAutoresizingMaskIntoConstraints = false
+        bContent.addSubview(startBtn)
+        
+        let testBtn = NSButton(title: "🧪 Test", target: self, action: #selector(runTest))
+        testBtn.bezelStyle = .rounded
+        testBtn.translatesAutoresizingMaskIntoConstraints = false
+        bContent.addSubview(testBtn)
+        
+        let clearBtn = NSButton(title: "Clear", target: self, action: #selector(clearLogs))
+        clearBtn.bezelStyle = .rounded
+        clearBtn.translatesAutoresizingMaskIntoConstraints = false
+        bContent.addSubview(clearBtn)
+        
+        // --- Row 2: Location, Radius, Interval & Colour ---
+        pLabel = NSTextField(labelWithString: "Postcode:")
         pLabel.font = NSFont.boldSystemFont(ofSize: 12)
         pLabel.translatesAutoresizingMaskIntoConstraints = false
         bContent.addSubview(pLabel)
@@ -119,22 +160,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         sLabel.translatesAutoresizingMaskIntoConstraints = false
         bContent.addSubview(sLabel)
         
-        startBtn = NSButton(title: "▶ Start Monitoring", target: self, action: #selector(toggleMonitoring))
-        startBtn.bezelStyle = .rounded
-        startBtn.translatesAutoresizingMaskIntoConstraints = false
-        bContent.addSubview(startBtn)
-        
-        let testBtn = NSButton(title: "🧪 Test", target: self, action: #selector(runTest))
-        testBtn.bezelStyle = .rounded
-        testBtn.translatesAutoresizingMaskIntoConstraints = false
-        bContent.addSubview(testBtn)
-        
-        let clearBtn = NSButton(title: "Clear", target: self, action: #selector(clearLogs))
-        clearBtn.bezelStyle = .rounded
-        clearBtn.translatesAutoresizingMaskIntoConstraints = false
-        bContent.addSubview(clearBtn)
-        
-        // --- Row 2: Colour & Multi-Storage Selection ---
         let colorLabel = NSTextField(labelWithString: "Colour:")
         colorLabel.font = NSFont.boldSystemFont(ofSize: 12)
         colorLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -147,6 +172,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         colorPopUp.translatesAutoresizingMaskIntoConstraints = false
         bContent.addSubview(colorPopUp)
         
+        // --- Row 3: Multi-Storage Selection ---
         let storageLabel = NSTextField(labelWithString: "Storage:")
         storageLabel.font = NSFont.boldSystemFont(ofSize: 12)
         storageLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -178,7 +204,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         modelSummaryLabel.translatesAutoresizingMaskIntoConstraints = false
         bContent.addSubview(modelSummaryLabel)
         
-        // --- Row 3: Discord Webhook URL (Fluid stretching) ---
+        // --- Row 4: Discord Webhook URL (Fluid stretching) ---
         let phoneLabel = NSTextField(labelWithString: "📱 Discord Webhook:")
         phoneLabel.font = NSFont.boldSystemFont(ofSize: 12)
         phoneLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -224,6 +250,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         // --- Auto Layout Constraints ---
         NSLayoutConstraint.activate([
+            // Header
             title.topAnchor.constraint(equalTo: content.topAnchor, constant: 14),
             title.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 20),
             
@@ -231,12 +258,41 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             sub.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 20),
             sub.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -20),
             
+            // Settings Box (Expands with window width)
             box.topAnchor.constraint(equalTo: sub.bottomAnchor, constant: 10),
             box.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 20),
             box.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -20),
-            box.heightAnchor.constraint(equalToConstant: 142),
+            box.heightAnchor.constraint(equalToConstant: 168),
             
-            pLabel.topAnchor.constraint(equalTo: bContent.topAnchor, constant: 8),
+            // --- Row 1 Constraints ---
+            regionLabel.topAnchor.constraint(equalTo: bContent.topAnchor, constant: 8),
+            regionLabel.leadingAnchor.constraint(equalTo: bContent.leadingAnchor, constant: 10),
+            
+            regionPopUp.centerYAnchor.constraint(equalTo: regionLabel.centerYAnchor),
+            regionPopUp.leadingAnchor.constraint(equalTo: regionLabel.trailingAnchor, constant: 6),
+            regionPopUp.widthAnchor.constraint(equalToConstant: 165),
+            
+            browserLabel.centerYAnchor.constraint(equalTo: regionLabel.centerYAnchor),
+            browserLabel.leadingAnchor.constraint(equalTo: regionPopUp.trailingAnchor, constant: 14),
+            
+            browserPopUp.centerYAnchor.constraint(equalTo: regionLabel.centerYAnchor),
+            browserPopUp.leadingAnchor.constraint(equalTo: browserLabel.trailingAnchor, constant: 6),
+            browserPopUp.widthAnchor.constraint(equalToConstant: 135),
+            
+            clearBtn.centerYAnchor.constraint(equalTo: regionLabel.centerYAnchor),
+            clearBtn.trailingAnchor.constraint(equalTo: bContent.trailingAnchor, constant: -10),
+            clearBtn.widthAnchor.constraint(equalToConstant: 55),
+            
+            testBtn.centerYAnchor.constraint(equalTo: regionLabel.centerYAnchor),
+            testBtn.trailingAnchor.constraint(equalTo: clearBtn.leadingAnchor, constant: -6),
+            testBtn.widthAnchor.constraint(equalToConstant: 65),
+            
+            startBtn.centerYAnchor.constraint(equalTo: regionLabel.centerYAnchor),
+            startBtn.trailingAnchor.constraint(equalTo: testBtn.leadingAnchor, constant: -6),
+            startBtn.widthAnchor.constraint(equalToConstant: 145),
+            
+            // --- Row 2 Constraints ---
+            pLabel.topAnchor.constraint(equalTo: regionLabel.bottomAnchor, constant: 14),
             pLabel.leadingAnchor.constraint(equalTo: bContent.leadingAnchor, constant: 10),
             
             postcodeField.centerYAnchor.constraint(equalTo: pLabel.centerYAnchor),
@@ -266,45 +322,35 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             sLabel.centerYAnchor.constraint(equalTo: pLabel.centerYAnchor),
             sLabel.leadingAnchor.constraint(equalTo: intervalField.trailingAnchor, constant: 3),
             
-            clearBtn.centerYAnchor.constraint(equalTo: pLabel.centerYAnchor),
-            clearBtn.trailingAnchor.constraint(equalTo: bContent.trailingAnchor, constant: -10),
-            clearBtn.widthAnchor.constraint(equalToConstant: 55),
+            colorLabel.centerYAnchor.constraint(equalTo: pLabel.centerYAnchor),
+            colorLabel.leadingAnchor.constraint(equalTo: sLabel.trailingAnchor, constant: 14),
             
-            testBtn.centerYAnchor.constraint(equalTo: pLabel.centerYAnchor),
-            testBtn.trailingAnchor.constraint(equalTo: clearBtn.leadingAnchor, constant: -6),
-            testBtn.widthAnchor.constraint(equalToConstant: 65),
-            
-            startBtn.centerYAnchor.constraint(equalTo: pLabel.centerYAnchor),
-            startBtn.trailingAnchor.constraint(equalTo: testBtn.leadingAnchor, constant: -6),
-            startBtn.widthAnchor.constraint(equalToConstant: 145),
-            
-            colorLabel.topAnchor.constraint(equalTo: pLabel.bottomAnchor, constant: 14),
-            colorLabel.leadingAnchor.constraint(equalTo: bContent.leadingAnchor, constant: 10),
-            
-            colorPopUp.centerYAnchor.constraint(equalTo: colorLabel.centerYAnchor),
+            colorPopUp.centerYAnchor.constraint(equalTo: pLabel.centerYAnchor),
             colorPopUp.leadingAnchor.constraint(equalTo: colorLabel.trailingAnchor, constant: 6),
             colorPopUp.widthAnchor.constraint(equalToConstant: 125),
             
-            storageLabel.centerYAnchor.constraint(equalTo: colorLabel.centerYAnchor),
-            storageLabel.leadingAnchor.constraint(equalTo: colorPopUp.trailingAnchor, constant: 14),
+            // --- Row 3 Constraints ---
+            storageLabel.topAnchor.constraint(equalTo: pLabel.bottomAnchor, constant: 14),
+            storageLabel.leadingAnchor.constraint(equalTo: bContent.leadingAnchor, constant: 10),
             
-            check256.centerYAnchor.constraint(equalTo: colorLabel.centerYAnchor),
+            check256.centerYAnchor.constraint(equalTo: storageLabel.centerYAnchor),
             check256.leadingAnchor.constraint(equalTo: storageLabel.trailingAnchor, constant: 6),
             
-            check512.centerYAnchor.constraint(equalTo: colorLabel.centerYAnchor),
+            check512.centerYAnchor.constraint(equalTo: storageLabel.centerYAnchor),
             check512.leadingAnchor.constraint(equalTo: check256.trailingAnchor, constant: 6),
             
-            check1tb.centerYAnchor.constraint(equalTo: colorLabel.centerYAnchor),
+            check1tb.centerYAnchor.constraint(equalTo: storageLabel.centerYAnchor),
             check1tb.leadingAnchor.constraint(equalTo: check512.trailingAnchor, constant: 6),
             
-            check2tb.centerYAnchor.constraint(equalTo: colorLabel.centerYAnchor),
+            check2tb.centerYAnchor.constraint(equalTo: storageLabel.centerYAnchor),
             check2tb.leadingAnchor.constraint(equalTo: check1tb.trailingAnchor, constant: 6),
             
-            modelSummaryLabel.centerYAnchor.constraint(equalTo: colorLabel.centerYAnchor),
+            modelSummaryLabel.centerYAnchor.constraint(equalTo: storageLabel.centerYAnchor),
             modelSummaryLabel.leadingAnchor.constraint(equalTo: check2tb.trailingAnchor, constant: 8),
             modelSummaryLabel.trailingAnchor.constraint(lessThanOrEqualTo: bContent.trailingAnchor, constant: -10),
             
-            phoneLabel.topAnchor.constraint(equalTo: colorLabel.bottomAnchor, constant: 14),
+            // --- Row 4 Constraints (Discord Webhook fluid) ---
+            phoneLabel.topAnchor.constraint(equalTo: storageLabel.bottomAnchor, constant: 14),
             phoneLabel.leadingAnchor.constraint(equalTo: bContent.leadingAnchor, constant: 10),
             
             hintLabel.centerYAnchor.constraint(equalTo: phoneLabel.centerYAnchor),
@@ -316,10 +362,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             discordField.trailingAnchor.constraint(equalTo: hintLabel.leadingAnchor, constant: -8),
             discordField.heightAnchor.constraint(equalToConstant: 22),
             
+            // Status Label
             statusLabel.topAnchor.constraint(equalTo: box.bottomAnchor, constant: 8),
             statusLabel.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 22),
             statusLabel.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -20),
             
+            // Log Console (Takes all remaining width AND vertical space)
             scroll.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 6),
             scroll.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 20),
             scroll.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -20),
@@ -328,7 +376,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         updateModelSummary()
         
-        appendLog("🍏 Apple UK Stock Monitor Initialized.\nTarget: Multi-Model Search (Night Sky & Star White)\nStorages: 256GB, 512GB, 1TB, 2TB\nFeatures: Auto-opens Firefox • Discord push alerts • Audio announcements\nClick 'Start Monitoring' to begin, or '🧪 Test' to verify alerts.\n\n")
+        appendLog("🍏 Apple Stock Monitor Initialized.\nRegions: UK & US supported • Browsers: Firefox, Safari, Chrome\nStorages: 256GB, 512GB, 1TB, 2TB • Colours: Night Sky, Star White\nSelect your parameters and click 'Start Monitoring', or '🧪 Test' to verify alerts.\n\n")
         
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -347,7 +395,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
     
+    @objc func regionChanged() {
+        let isUS = (regionPopUp.indexOfSelectedItem == 1)
+        if isUS {
+            pLabel.stringValue = "US ZIP:"
+            if postcodeField.stringValue == "W1B 3AG" || postcodeField.stringValue.contains(" ") {
+                postcodeField.stringValue = "10001"
+            }
+        } else {
+            pLabel.stringValue = "Postcode:"
+            if postcodeField.stringValue == "10001" {
+                postcodeField.stringValue = "W1B 3AG"
+            }
+        }
+        updateModelSummary()
+    }
+    
     func getSelectedSKUs() -> [String] {
+        let isUS = (regionPopUp.indexOfSelectedItem == 1)
         let selectedColor = colorPopUp.titleOfSelectedItem ?? "Both Colours"
         var storages: [String] = []
         if check256.state == .on { storages.append("256GB") }
@@ -360,25 +425,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             check256.state = .on
         }
         
-        let skuCatalog: [String: [String: String]] = [
-            "Star White": [
-                "256GB": "MK2D4QN/A",
-                "512GB": "MK2F4QN/A",
-                "1TB": "MK2H4QN/A",
-                "2TB": "MK2K4QN/A"
-            ],
-            "Night Sky": [
-                "256GB": "MK2E4QN/A",
-                "512GB": "MK2G4QN/A",
-                "1TB": "MK2J4QN/A",
-                "2TB": "MK2L4QN/A"
-            ]
+        let ukCatalog: [String: [String: String]] = [
+            "Star White": ["256GB": "MK2D4QN/A", "512GB": "MK2F4QN/A", "1TB": "MK2H4QN/A", "2TB": "MK2K4QN/A"],
+            "Night Sky":  ["256GB": "MK2E4QN/A", "512GB": "MK2G4QN/A", "1TB": "MK2J4QN/A", "2TB": "MK2L4QN/A"]
         ]
         
+        let usCatalog: [String: [String: String]] = [
+            "Star White": ["256GB": "MK1E4LL/A", "512GB": "MK1G4LL/A", "1TB": "MK1J4LL/A", "2TB": "MK1Q4LL/A"],
+            "Night Sky":  ["256GB": "MK1F4LL/A", "512GB": "MK1H4LL/A", "1TB": "MK1L4LL/A", "2TB": "MK1R4LL/A"]
+        ]
+        
+        let activeCatalog = isUS ? usCatalog : ukCatalog
         var skus: [String] = []
         let colors = (selectedColor == "Both Colours") ? ["Night Sky", "Star White"] : [selectedColor]
         for c in colors {
-            if let storeMap = skuCatalog[c] {
+            if let storeMap = activeCatalog[c] {
                 for s in storages {
                     if let sku = storeMap[s] {
                         skus.append(sku)
@@ -390,6 +451,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     @objc func updateModelSummary() {
+        let isUS = (regionPopUp.indexOfSelectedItem == 1)
         let skus = getSelectedSKUs()
         let count = skus.count
         let color = colorPopUp.titleOfSelectedItem ?? "Both Colours"
@@ -400,7 +462,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if check2tb.state == .on { storages.append("2TB") }
         
         let storagesText = storages.joined(separator: ", ")
-        modelSummaryLabel.stringValue = "(\(count) models: \(storagesText) in \(color))"
+        let flag = isUS ? "🇺🇸 US" : "🇬🇧 UK"
+        modelSummaryLabel.stringValue = "(\(count) models: \(storagesText) in \(color) • \(flag))"
+    }
+    
+    func getBrowserArg() -> String {
+        switch browserPopUp.indexOfSelectedItem {
+        case 1:  return "safari"
+        case 2:  return "chrome"
+        case 3:  return "default"
+        default: return "firefox"
+        }
     }
     
     @objc func toggleMonitoring() {
@@ -412,6 +484,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func startMonitoring() {
+        let isUS = (regionPopUp.indexOfSelectedItem == 1)
+        let country = isUS ? "us" : "uk"
+        let browser = getBrowserArg()
         let pc = postcodeField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         let rad = radiusField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         let inv = intervalField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -420,12 +495,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let script = resolvedScriptPath
         
         let discordDisplay = discord.isEmpty ? "Disabled" : "Active"
-        appendLog("▶ Starting stock monitor (Postcode: \(pc), Radius: \(rad) mi, Cadence: \(inv)s, Models: \(skus.count), Discord: \(discordDisplay))...\n")
+        appendLog("▶ Starting stock monitor (Region: \(country.uppercased()), Location: \(pc), Radius: \(rad) mi, Cadence: \(inv)s, Browser: \(browser.capitalized), Models: \(skus.count), Discord: \(discordDisplay))...\n")
         
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
         var args = [
             "-u", script,
+            "--country", country,
+            "--browser", browser,
             "--postcode", pc,
             "--distance", rad,
             "--interval", inv,
@@ -481,7 +558,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             )
             
             startBtn.title = "⏹ Stop Monitoring"
-            statusLabel.stringValue = "Status: 🟢 Monitoring Active (\(skus.count) models near \(pc), \(rad) mi)"
+            statusLabel.stringValue = "Status: 🟢 Monitoring Active (\(country.uppercased()) • \(skus.count) models near \(pc), \(rad) mi)"
             statusLabel.textColor = .systemGreen
         } catch {
             appendLog("⚠️ Failed to launch monitor: \(error)\n")
@@ -521,20 +598,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         p.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
         let escapedTitle = title.replacingOccurrences(of: "'", with: "\\'")
         let escapedDesc = desc.replacingOccurrences(of: "'", with: "\\'")
-        let pyCode = "import urllib.request, json, time; url = '\(discord)'; p = {'content': 'ℹ️ **\(escapedTitle)**', 'embeds': [{'title': '🍏 \(escapedTitle)', 'description': '\(escapedDesc)', 'color': \(color), 'footer': {'text': 'Apple UK Stock Monitor • Status Log'}, 'timestamp': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}]}; req = urllib.request.Request(url, data=json.dumps(p).encode('utf-8'), headers={'Content-Type': 'application/json', 'User-Agent': 'AppleStockMonitor/1.0'}); urllib.request.urlopen(req, timeout=4)"
+        let pyCode = "import urllib.request, json, time; url = '\(discord)'; p = {'content': 'ℹ️ **\(escapedTitle)**', 'embeds': [{'title': '🍏 \(escapedTitle)', 'description': '\(escapedDesc)', 'color': \(color), 'footer': {'text': 'Apple Stock Monitor • Status Log'}, 'timestamp': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}]}; req = urllib.request.Request(url, data=json.dumps(p).encode('utf-8'), headers={'Content-Type': 'application/json', 'User-Agent': 'AppleStockMonitor/1.0'}); urllib.request.urlopen(req, timeout=4)"
         p.arguments = ["-c", pyCode]
         try? p.run()
     }
     
     @objc func runTest() {
+        let isUS = (regionPopUp.indexOfSelectedItem == 1)
+        let country = isUS ? "us" : "uk"
+        let browser = getBrowserArg()
         let discord = discordField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         let skus = getSelectedSKUs()
         let script = resolvedScriptPath
-        appendLog("\n🧪 Running alert test for \(skus.count) selected model(s) (Firefox launch, voice alert, desktop chime, Discord phone push)...\n")
+        appendLog("\n🧪 Running alert test for \(skus.count) selected model(s) (Region: \(country.uppercased()), Browser: \(browser.capitalized), Voice alert, desktop chime, Discord phone push)...\n")
         
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
-        var args = ["-u", script, "--test-browser", "--parts"]
+        var args = [
+            "-u", script,
+            "--country", country,
+            "--browser", browser,
+            "--test-browser",
+            "--parts"
+        ]
         args.append(contentsOf: skus)
         if !discord.isEmpty {
             args.append(contentsOf: ["--discord", discord])

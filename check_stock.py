@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-Apple UK In-Store Stock Monitor
+Apple In-Store Stock Monitor (UK & US)
 High-performance retail store inventory checker for Apple products.
 Supports multi-colour and multi-storage monitoring simultaneously in a single HTTP/2 request.
-When stock is detected, automatically launches Firefox to the checkout page,
-plays system audio announcements, and dispatches high-priority push notifications.
+Supports UK (Postcode) and US (ZIP Code) regions.
+When stock is detected, automatically launches your chosen browser (Firefox, Safari, Chrome, or Default),
+plays system audio announcements, and dispatches high-priority Discord push notifications.
 """
 
 import argparse
@@ -20,8 +21,8 @@ import urllib.parse
 import urllib.request
 import urllib.error
 
-# Official Apple UK Product Catalog for iPhone Duo
-PRODUCT_CATALOG = {
+# Official Apple UK Product Catalog (GBP £)
+UK_PRODUCT_CATALOG = {
     "MK2D4QN/A": {"name": "iPhone Duo 256GB Star White", "price": "£1,999", "color": "Star White", "storage": "256GB", "url": "https://www.apple.com/uk/shop/product/MK2D4QN/A"},
     "MK2E4QN/A": {"name": "iPhone Duo 256GB Night Sky", "price": "£1,999", "color": "Night Sky", "storage": "256GB", "url": "https://www.apple.com/uk/shop/product/MK2E4QN/A"},
     "MK2F4QN/A": {"name": "iPhone Duo 512GB Star White", "price": "£2,199", "color": "Star White", "storage": "512GB", "url": "https://www.apple.com/uk/shop/product/MK2F4QN/A"},
@@ -32,12 +33,25 @@ PRODUCT_CATALOG = {
     "MK2L4QN/A": {"name": "iPhone Duo 2TB Night Sky", "price": "£3,199", "color": "Night Sky", "storage": "2TB", "url": "https://www.apple.com/uk/shop/product/MK2L4QN/A"},
 }
 
-DEFAULT_PART_NUMBER = "MK2E4QN/A"
-DEFAULT_POSTCODE = "W1B 3AG"  # Central London / Regent Street (Generic Default)
+# Official Apple US Product Catalog (USD $)
+US_PRODUCT_CATALOG = {
+    "MK1E4LL/A": {"name": "iPhone Duo 256GB Star White", "price": "$1,999", "color": "Star White", "storage": "256GB", "url": "https://www.apple.com/shop/product/MK1E4LL/A"},
+    "MK1F4LL/A": {"name": "iPhone Duo 256GB Night Sky", "price": "$1,999", "color": "Night Sky", "storage": "256GB", "url": "https://www.apple.com/shop/product/MK1F4LL/A"},
+    "MK1G4LL/A": {"name": "iPhone Duo 512GB Star White", "price": "$2,199", "color": "Star White", "storage": "512GB", "url": "https://www.apple.com/shop/product/MK1G4LL/A"},
+    "MK1H4LL/A": {"name": "iPhone Duo 512GB Night Sky", "price": "$2,199", "color": "Night Sky", "storage": "512GB", "url": "https://www.apple.com/shop/product/MK1H4LL/A"},
+    "MK1J4LL/A": {"name": "iPhone Duo 1TB Star White", "price": "$2,599", "color": "Star White", "storage": "1TB", "url": "https://www.apple.com/shop/product/MK1J4LL/A"},
+    "MK1L4LL/A": {"name": "iPhone Duo 1TB Night Sky", "price": "$2,599", "color": "Night Sky", "storage": "1TB", "url": "https://www.apple.com/shop/product/MK1L4LL/A"},
+    "MK1Q4LL/A": {"name": "iPhone Duo 2TB Star White", "price": "$3,199", "color": "Star White", "storage": "2TB", "url": "https://www.apple.com/shop/product/MK1Q4LL/A"},
+    "MK1R4LL/A": {"name": "iPhone Duo 2TB Night Sky", "price": "$3,199", "color": "Night Sky", "storage": "2TB", "url": "https://www.apple.com/shop/product/MK1R4LL/A"},
+}
+
+# Unified Catalog Lookup
+PRODUCT_CATALOG = {**UK_PRODUCT_CATALOG, **US_PRODUCT_CATALOG}
+
+DEFAULT_POSTCODE_UK = "W1B 3AG"
+DEFAULT_ZIP_US = "10001"
 DEFAULT_MAX_DISTANCE_MILES = 50.0
 DEFAULT_INTERVAL_SECONDS = 45
-FALLBACK_BUY_URL = "https://www.apple.com/uk/shop/buy-iphone/iphone-duo"
-FIREFOX_APP_PATH = "/Applications/Firefox.app"
 COOKIE_JAR_PATH = "/tmp/apple_stock_cookies.txt"
 
 BROWSER_HEADERS = {
@@ -46,8 +60,7 @@ BROWSER_HEADERS = {
         "Gecko/20100101 Firefox/132.0"
     ),
     "Accept": "application/json, text/javascript, */*; q=0.01",
-    "Accept-Language": "en-GB,en;q=0.9",
-    "Referer": "https://www.apple.com/uk/shop/buy-iphone/iphone-duo",
+    "Accept-Language": "en-US,en-GB;q=0.9,en;q=0.8",
     "Sec-Fetch-Dest": "empty",
     "Sec-Fetch-Mode": "cors",
     "Sec-Fetch-Site": "same-origin",
@@ -74,7 +87,7 @@ def send_discord_alert(
     description: str,
     store_name: str = "",
     distance_str: str = "",
-    buy_url: str = FALLBACK_BUY_URL,
+    buy_url: str = "",
     ping_everyone: bool = True,
     color: int = None,
     custom_fields: list = None,
@@ -97,7 +110,7 @@ def send_discord_alert(
         "title": "🍏 " + title,
         "description": description,
         "color": color,
-        "footer": {"text": "Apple UK Stock Monitor"},
+        "footer": {"text": "Apple Stock Monitor"},
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
 
@@ -146,16 +159,28 @@ def play_audio_alert(message: str):
         pass
 
 
-def open_in_firefox(url: str):
-    """Open product buy page directly in Firefox."""
-    print(f"\n🚀 Launching Firefox to: {url}")
-    try:
-        if os.path.exists(FIREFOX_APP_PATH):
-            subprocess.Popen(["open", "-a", FIREFOX_APP_PATH, url])
+def open_browser(url: str, browser: str = "firefox"):
+    """Open product buy page in chosen browser (Firefox, Safari, Chrome, or Default)."""
+    b = browser.lower().strip()
+    print(f"\n🚀 Launching {browser.title()} to: {url}")
+    
+    cmd = []
+    if b == "safari":
+        cmd = ["open", "-a", "Safari", url]
+    elif "chrome" in b:
+        cmd = ["open", "-a", "Google Chrome", url]
+    elif "firefox" in b:
+        if os.path.exists("/Applications/Firefox.app"):
+            cmd = ["open", "-a", "/Applications/Firefox.app", url]
         else:
-            subprocess.Popen(["open", url])
+            cmd = ["open", "-a", "Firefox", url]
+    else:
+        cmd = ["open", url]
+
+    try:
+        subprocess.Popen(cmd)
     except Exception as e:
-        print(f"⚠️ Could not launch Firefox: {e}")
+        print(f"⚠️ Primary launch failed ({e}), opening in default browser...")
         subprocess.Popen(["open", url])
 
 
@@ -202,19 +227,26 @@ def parse_distance(store: dict) -> float:
     return 999.0
 
 
-def fetch_fulfillment_data(part_numbers: list, postcode: str) -> dict:
+def fetch_fulfillment_data(part_numbers: list, postcode: str, country: str = "uk") -> dict:
     """
     Fetch availability data for multiple parts simultaneously from Apple's retail stock API.
-    Combines parts.0=...&parts.1=... in a single fast HTTP GET request.
+    Supports UK (/uk/shop/retail/pickup-message) and US (/shop/retail/pickup-message).
     """
+    is_us = (country.lower() in ["us", "usa", "united states"])
+    base_endpoint = "https://www.apple.com/shop/retail/pickup-message" if is_us else "https://www.apple.com/uk/shop/retail/pickup-message"
+    referer = "https://www.apple.com/shop/buy-iphone/iphone-duo" if is_us else "https://www.apple.com/uk/shop/buy-iphone/iphone-duo"
+
     parts_query = "&".join([f"parts.{i}={urllib.parse.quote(p, safe='')}" for i, p in enumerate(part_numbers)])
     formatted_postcode = postcode.strip()
 
     candidate_urls = [
-        f"https://www.apple.com/uk/shop/retail/pickup-message?pl=true&mts.0=regular&{parts_query}&location={urllib.parse.quote_plus(formatted_postcode)}",
-        f"https://www.apple.com/uk/shop/retail/pickup-message?pl=true&{parts_query}&location={urllib.parse.quote(formatted_postcode)}",
-        f"https://www.apple.com/uk/shop/retail/pickup-message?pl=true&{parts_query}&location={urllib.parse.quote(formatted_postcode.replace(' ', ''))}",
+        f"{base_endpoint}?pl=true&mts.0=regular&{parts_query}&location={urllib.parse.quote_plus(formatted_postcode)}",
+        f"{base_endpoint}?pl=true&{parts_query}&location={urllib.parse.quote(formatted_postcode)}",
+        f"{base_endpoint}?pl=true&{parts_query}&location={urllib.parse.quote(formatted_postcode.replace(' ', ''))}",
     ]
+
+    headers = dict(BROWSER_HEADERS)
+    headers["Referer"] = referer
 
     last_error = None
 
@@ -229,14 +261,14 @@ def fetch_fulfillment_data(part_numbers: list, postcode: str) -> dict:
                 "--max-time", "25",
                 "-c", COOKIE_JAR_PATH,
                 "-b", COOKIE_JAR_PATH,
-                "-H", f"User-Agent: {BROWSER_HEADERS['User-Agent']}",
-                "-H", f"Accept: {BROWSER_HEADERS['Accept']}",
-                "-H", f"Accept-Language: {BROWSER_HEADERS['Accept-Language']}",
-                "-H", f"Referer: {BROWSER_HEADERS['Referer']}",
+                "-H", f"User-Agent: {headers['User-Agent']}",
+                "-H", f"Accept: {headers['Accept']}",
+                "-H", f"Accept-Language: {headers['Accept-Language']}",
+                "-H", f"Referer: {headers['Referer']}",
                 "-H", "Sec-Fetch-Dest: empty",
                 "-H", "Sec-Fetch-Mode: cors",
                 "-H", "Sec-Fetch-Site: same-origin",
-                "-H", f"Priority: {BROWSER_HEADERS['Priority']}",
+                "-H", f"Priority: {headers['Priority']}",
                 "-H", "Cache-Control: no-cache",
                 "-w", "\n%{http_code}",
             ]
@@ -272,7 +304,7 @@ def fetch_fulfillment_data(part_numbers: list, postcode: str) -> dict:
                 ssl_context.check_hostname = False
                 ssl_context.verify_mode = ssl.CERT_NONE
 
-                req = urllib.request.Request(url, headers=BROWSER_HEADERS)
+                req = urllib.request.Request(url, headers=headers)
                 with urllib.request.urlopen(req, timeout=25, context=ssl_context) as response:
                     if response.status == 200:
                         raw_body = response.read().decode("utf-8")
@@ -299,12 +331,12 @@ def fetch_fulfillment_data(part_numbers: list, postcode: str) -> dict:
     raise RuntimeError("Failed to retrieve inventory data from Apple.")
 
 
-def check_availability(part_numbers: list, postcode: str, max_distance: float):
+def check_availability(part_numbers: list, postcode: str, max_distance: float, country: str = "uk"):
     """
     Check stock for all requested parts across retail stores within distance limit.
     Returns: (in_stock_matches, nearby_stores, all_stores)
     """
-    data = fetch_fulfillment_data(part_numbers, postcode)
+    data = fetch_fulfillment_data(part_numbers, postcode, country)
     stores = extract_stores(data)
 
     all_stores = []
@@ -344,7 +376,7 @@ def check_availability(part_numbers: list, postcode: str, max_distance: float):
 
             if is_available:
                 store_has_stock = True
-                p_meta = PRODUCT_CATALOG.get(p, {"name": p, "price": "", "url": f"https://www.apple.com/uk/shop/product/{p}"})
+                p_meta = PRODUCT_CATALOG.get(p, {"name": p, "price": "", "url": f"https://www.apple.com/shop/product/{p}"})
                 in_stock_matches.append({
                     "store_name": display_name,
                     "distance": distance,
@@ -371,13 +403,16 @@ def check_availability(part_numbers: list, postcode: str, max_distance: float):
     return nearby_in_stock, nearby_stores, all_stores
 
 
-def resolve_skus(parts_arg: list, color_arg: str, storages_arg: list) -> list:
-    """Resolve specific Apple UK SKUs based on CLI or GUI selections."""
+def resolve_skus(parts_arg: list, color_arg: str, storages_arg: list, country: str = "uk") -> list:
+    """Resolve specific Apple SKUs for UK or US based on CLI or GUI selections."""
     if parts_arg:
         valid_parts = [p for p in parts_arg if p in PRODUCT_CATALOG]
         if valid_parts:
             return valid_parts
         return parts_arg
+
+    is_us = (country.lower() in ["us", "usa", "united states"])
+    catalog = US_PRODUCT_CATALOG if is_us else UK_PRODUCT_CATALOG
 
     target_colors = []
     c = (color_arg or "both").lower().replace("-", " ").replace("_", " ")
@@ -406,16 +441,29 @@ def resolve_skus(parts_arg: list, color_arg: str, storages_arg: list) -> list:
         clean_storages = ["256GB"]
 
     selected = []
-    for sku, info in PRODUCT_CATALOG.items():
+    for sku, info in catalog.items():
         if info["color"] in target_colors and info["storage"] in clean_storages:
             selected.append(sku)
 
-    return selected or [DEFAULT_PART_NUMBER]
+    fallback_sku = "MK1F4LL/A" if is_us else "MK2E4QN/A"
+    return selected or [fallback_sku]
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Monitor Apple UK Retail Inventory for Apple Products."
+        description="Monitor Apple Retail Inventory (UK & US) across multiple models."
+    )
+    parser.add_argument(
+        "--country",
+        choices=["uk", "us", "usa"],
+        default="uk",
+        help="Country / Region to monitor: uk or us (default: uk)",
+    )
+    parser.add_argument(
+        "--browser",
+        choices=["firefox", "safari", "chrome", "google-chrome", "default"],
+        default="firefox",
+        help="Browser to launch upon stock detection: firefox, safari, chrome, default",
     )
     parser.add_argument(
         "--parts",
@@ -441,8 +489,8 @@ def main():
     )
     parser.add_argument(
         "--postcode",
-        default=DEFAULT_POSTCODE,
-        help=f"UK Postcode (default: {DEFAULT_POSTCODE})",
+        default="",
+        help="Postcode (UK) or ZIP Code (US) to search around.",
     )
     parser.add_argument(
         "--distance",
@@ -464,7 +512,7 @@ def main():
     parser.add_argument(
         "--test-browser",
         action="store_true",
-        help="Test the Firefox browser launch, notification, and Discord push immediately.",
+        help="Test browser launch, audio alert, and Discord push immediately.",
     )
     parser.add_argument(
         "--discord",
@@ -473,52 +521,58 @@ def main():
     )
     args = parser.parse_args()
 
+    country = "us" if args.country in ["us", "usa"] else "uk"
+    default_postal = DEFAULT_ZIP_US if country == "us" else DEFAULT_POSTCODE_UK
+    postal_code = args.postcode.strip() if args.postcode else default_postal
+
     parts_input = args.parts or ([args.part] if args.part else [])
-    monitored_skus = resolve_skus(parts_input, args.color, args.storages)
+    monitored_skus = resolve_skus(parts_input, args.color, args.storages, country)
 
     first_sku = monitored_skus[0]
-    first_meta = PRODUCT_CATALOG.get(first_sku, {"url": FALLBACK_BUY_URL, "name": "iPhone Duo"})
+    first_meta = PRODUCT_CATALOG.get(first_sku, {"url": "https://www.apple.com", "name": "iPhone Duo"})
 
     if args.test_browser:
         print("=" * 65)
-        print(" 🧪 TEST MODE: Testing Alerts, Firefox & Discord Push")
+        print(f" 🧪 TEST MODE: Testing Alerts, Browser ({args.browser.title()}) & Discord")
         print("=" * 65)
         print("1. Sending desktop notification...")
         notify_mac(
             "Apple Stock Alert [TEST]",
-            f"Testing alerts for {len(monitored_skus)} model(s)",
+            f"Testing alerts for {len(monitored_skus)} model(s) ({country.upper()})",
         )
         print("2. Playing alert chime & announcement...")
         play_audio_alert(f"Test alert. Stock monitor is active for {len(monitored_skus)} models.")
-        print(f"3. Launching Firefox to: {first_meta['url']}...")
-        open_in_firefox(first_meta["url"])
+        print(f"3. Launching {args.browser.title()} to: {first_meta['url']}...")
+        open_browser(first_meta["url"], args.browser)
 
         if args.discord:
             print("4. 📱 Sending test push alert to Discord channel...")
             model_summary = ", ".join([PRODUCT_CATALOG.get(s, {}).get("name", s) for s in monitored_skus])
             send_discord_alert(
                 args.discord,
-                "TEST ALERT: Apple Multi-Model Monitor Connected",
-                f"Your Discord push alerts are active! Monitoring {len(monitored_skus)} model(s):\n• {model_summary}",
+                f"TEST ALERT: Apple Monitor Connected ({country.upper()})",
+                f"Your Discord push alerts are active!\n• Region: {country.upper()}\n• Browser: {args.browser.title()}\n• Models: {model_summary}",
                 store_name="Apple Store (Test)",
                 distance_str="Nearby",
                 buy_url=first_meta["url"],
                 custom_fields=[
                     {"name": "🎯 Monitored Models", "value": model_summary, "inline": False},
-                    {"name": "📍 Search Area", "value": f"{args.postcode} (within {args.distance} miles)", "inline": True},
+                    {"name": "📍 Search Area", "value": f"{postal_code} (within {args.distance} miles)", "inline": True},
                     {"name": "⚡ Direct Checkout Link", "value": f"[🛒 Buy on Apple.com]({first_meta['url']})", "inline": False},
                 ]
             )
 
-        print("\n✅ Test complete! If Firefox opened and alerts fired, everything is working properly.")
+        print(f"\n✅ Test complete! If {args.browser.title()} opened and alerts fired, everything is working properly.")
         sys.exit(0)
 
     print("=" * 65)
-    print(" 🍏 Apple UK Stock Monitor — Multi-Model Search")
+    print(f" 🍏 Apple Stock Monitor — Multi-Model Search ({country.upper()})")
     print("=" * 65)
-    print(f" • Postcode       : {args.postcode}")
+    print(f" • Region         : {country.upper()}")
+    print(f" • Location       : {postal_code}")
     print(f" • Max Radius     : {args.distance} miles")
     print(f" • Check Interval : Every ~{args.interval} seconds")
+    print(f" • Browser        : {args.browser.title()}")
     print(f" • Models ({len(monitored_skus)}) :")
     for s in monitored_skus:
         info = PRODUCT_CATALOG.get(s, {"name": s, "price": ""})
@@ -530,8 +584,8 @@ def main():
         model_names = [f"• {PRODUCT_CATALOG.get(s, {}).get('name', s)}" for s in monitored_skus]
         send_discord_alert(
             args.discord,
-            f"🟢 Stock Monitor Started ({len(monitored_skus)} models)",
-            f"Monitoring active near **{args.postcode}** (within {args.distance} miles).\nCheck cadence: every ~{args.interval}s.\n\n**Target Models:**\n" + "\n".join(model_names),
+            f"🟢 Stock Monitor Started ({country.upper()} • {len(monitored_skus)} models)",
+            f"Monitoring active near **{postal_code}** (within {args.distance} miles).\nBrowser: **{args.browser.title()}** • Cadence: every ~{args.interval}s.\n\n**Target Models:**\n" + "\n".join(model_names),
             ping_everyone=False,
             color=0x3498DB,
         )
@@ -548,7 +602,7 @@ def main():
 
         try:
             in_stock_matches, nearby_stores, all_stores = check_availability(
-                monitored_skus, args.postcode, args.distance
+                monitored_skus, postal_code, args.distance, country
             )
             consecutive_errors = 0
 
@@ -564,21 +618,22 @@ def main():
                 for s in nearby_stores[:4]:
                     dist_str = f"~{s['distance']:.1f} mi" if s['distance'] < 900 else "Nearby"
                     store_lines.append(f"• **{s['name']}** ({dist_str}): Scanning {len(monitored_skus)} models")
-                stores_summary = "\n".join(store_lines) if store_lines else f"Scanning stores near {args.postcode}"
+                stores_summary = "\n".join(store_lines) if store_lines else f"Scanning stores near {postal_code}"
 
+                fallback_url = "https://www.apple.com/shop/buy-iphone" if country == "us" else "https://www.apple.com/uk/shop/buy-iphone"
                 fields = [
-                    {"name": "🟢 Status", "value": f"Active & Scanning ({len(monitored_skus)} models)", "inline": True},
+                    {"name": "🟢 Status", "value": f"Active ({country.upper()} • {len(monitored_skus)} models)", "inline": True},
                     {"name": "⏱️ Uptime", "value": f"{uptime_str} ({check_count} checks)", "inline": True},
-                    {"name": "📍 Target Area", "value": f"{args.postcode} ({args.distance} miles)", "inline": True},
+                    {"name": "📍 Target Area", "value": f"{postal_code} ({args.distance} miles)", "inline": True},
                     {"name": "🎯 Monitored Models", "value": models_str, "inline": False},
                     {"name": "🏬 Monitored Stores", "value": stores_summary, "inline": False},
-                    {"name": "⚡ Direct Buy Link", "value": f"[🛒 View Apple Store Page]({FALLBACK_BUY_URL})", "inline": False},
+                    {"name": "⚡ Direct Buy Link", "value": f"[🛒 View Apple Store Page]({fallback_url})", "inline": False},
                 ]
 
                 print(f"[{now_str}] ⏱️ Dispatching hourly status overview to Discord...")
                 send_discord_alert(
                     args.discord,
-                    f"Hourly Status Overview (Check #{check_count})",
+                    f"Hourly Status Overview ({country.upper()} • Check #{check_count})",
                     f"The stock monitor is actively running and scanning {len(monitored_skus)} model(s) every {args.interval}s.",
                     ping_everyone=True,
                     color=0x3498DB,
@@ -600,7 +655,7 @@ def main():
 
                     notify_mac(alert_title, alert_body)
                     play_audio_alert(f"{primary['product_name']} is in stock at {primary['store_name']}")
-                    open_in_firefox(primary["buy_url"])
+                    open_browser(primary["buy_url"], args.browser)
 
                     if args.discord:
                         print(f"[{now_str}] 📱 Dispatching Discord @everyone alert for {primary['product_name']}...")
@@ -622,7 +677,7 @@ def main():
                         alerted_keys.add((m["store_name"], m["part"]))
 
                     if not args.keep_monitoring:
-                        print("\n✅ Product page opened in Firefox. Exiting monitor so you can complete checkout.")
+                        print(f"\n✅ Product page opened in {args.browser.title()}. Exiting monitor so you can complete checkout.")
                         sys.exit(0)
                 else:
                     print(f"[{now_str}] (Already alerted for these matches; continuing checks...)")
