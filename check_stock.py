@@ -519,6 +519,19 @@ def main():
         default="",
         help="Discord webhook URL for instant phone push notifications.",
     )
+    parser.add_argument(
+        "--hourly-ping",
+        dest="hourly_ping",
+        action="store_true",
+        default=True,
+        help="Send hourly @everyone status heartbeat to Discord (default: True).",
+    )
+    parser.add_argument(
+        "--no-hourly-ping",
+        dest="hourly_ping",
+        action="store_false",
+        help="Disable hourly @everyone status heartbeat to Discord.",
+    )
     args = parser.parse_args()
 
     country = "us" if args.country in ["us", "usa"] else "uk"
@@ -606,8 +619,8 @@ def main():
             )
             consecutive_errors = 0
 
-            # Hourly Discord heartbeat summary (@everyone)
-            if args.discord and (time.time() - last_hourly_ping >= 3600):
+            # Hourly Discord heartbeat summary (@everyone) - only if enabled
+            if args.discord and args.hourly_ping and (time.time() - last_hourly_ping >= 3600):
                 elapsed_hours = (time.time() - start_time) / 3600.0
                 uptime_str = f"{elapsed_hours:.1f} hours" if elapsed_hours >= 1.5 else "1 hour"
 

@@ -14,6 +14,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var check512: NSButton!
     var check1tb: NSButton!
     var check2tb: NSButton!
+    var checkHourlyHeartbeat: NSButton!
     var modelSummaryLabel: NSTextField!
     var discordField: NSTextField!
     var startBtn: NSButton!
@@ -47,7 +48,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         
-        let rect = NSRect(x: 100, y: 100, width: 850, height: 720)
+        let rect = NSRect(x: 100, y: 100, width: 860, height: 720)
         window = NSWindow(
             contentRect: rect,
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -67,7 +68,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         title.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(title)
         
-        let sub = NSTextField(labelWithString: "UK & US Support • Firefox, Safari & Chrome • Multi-Model Search • Instant Alerts")
+        let sub = NSTextField(labelWithString: "UK & US Support • Firefox, Safari & Chrome • Multi-Model Search • 100% Vibe-Coded")
         sub.font = NSFont.systemFont(ofSize: 11)
         sub.textColor = .secondaryLabelColor
         sub.translatesAutoresizingMaskIntoConstraints = false
@@ -101,6 +102,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         browserPopUp = NSPopUpButton(frame: .zero, pullsDown: false)
         browserPopUp.addItems(withTitles: ["Firefox", "Safari", "Google Chrome", "Default Browser"])
+        browserPopUp.target = self
+        browserPopUp.action = #selector(preferenceChanged)
         browserPopUp.translatesAutoresizingMaskIntoConstraints = false
         bContent.addSubview(browserPopUp)
         
@@ -204,7 +207,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         modelSummaryLabel.translatesAutoresizingMaskIntoConstraints = false
         bContent.addSubview(modelSummaryLabel)
         
-        // --- Row 4: Discord Webhook URL (Fluid stretching) ---
+        // --- Row 4: Discord Webhook URL & Hourly Heartbeat Checkbox ---
         let phoneLabel = NSTextField(labelWithString: "📱 Discord Webhook:")
         phoneLabel.font = NSFont.boldSystemFont(ofSize: 12)
         phoneLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -215,11 +218,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         discordField.translatesAutoresizingMaskIntoConstraints = false
         bContent.addSubview(discordField)
         
-        let hintLabel = NSTextField(labelWithString: "(@everyone phone alert)")
-        hintLabel.textColor = .secondaryLabelColor
-        hintLabel.font = NSFont.systemFont(ofSize: 11)
-        hintLabel.translatesAutoresizingMaskIntoConstraints = false
-        bContent.addSubview(hintLabel)
+        checkHourlyHeartbeat = NSButton(checkboxWithTitle: "Hourly Heartbeat (@everyone)", target: self, action: #selector(preferenceChanged))
+        checkHourlyHeartbeat.state = .on
+        checkHourlyHeartbeat.toolTip = "Sends an hourly status overview card to Discord (@everyone) with active checks and uptime."
+        checkHourlyHeartbeat.translatesAutoresizingMaskIntoConstraints = false
+        bContent.addSubview(checkHourlyHeartbeat)
         
         // 3. Status Bar
         statusLabel = NSTextField(labelWithString: "Status: ⏹ Idle")
@@ -349,17 +352,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             modelSummaryLabel.leadingAnchor.constraint(equalTo: check2tb.trailingAnchor, constant: 8),
             modelSummaryLabel.trailingAnchor.constraint(lessThanOrEqualTo: bContent.trailingAnchor, constant: -10),
             
-            // --- Row 4 Constraints (Discord Webhook fluid) ---
+            // --- Row 4 Constraints (Discord Webhook & Heartbeat Checkbox) ---
             phoneLabel.topAnchor.constraint(equalTo: storageLabel.bottomAnchor, constant: 14),
             phoneLabel.leadingAnchor.constraint(equalTo: bContent.leadingAnchor, constant: 10),
             
-            hintLabel.centerYAnchor.constraint(equalTo: phoneLabel.centerYAnchor),
-            hintLabel.trailingAnchor.constraint(equalTo: bContent.trailingAnchor, constant: -10),
-            hintLabel.widthAnchor.constraint(equalToConstant: 145),
+            checkHourlyHeartbeat.centerYAnchor.constraint(equalTo: phoneLabel.centerYAnchor),
+            checkHourlyHeartbeat.trailingAnchor.constraint(equalTo: bContent.trailingAnchor, constant: -10),
+            checkHourlyHeartbeat.widthAnchor.constraint(equalToConstant: 200),
             
             discordField.centerYAnchor.constraint(equalTo: phoneLabel.centerYAnchor),
             discordField.leadingAnchor.constraint(equalTo: phoneLabel.trailingAnchor, constant: 6),
-            discordField.trailingAnchor.constraint(equalTo: hintLabel.leadingAnchor, constant: -8),
+            discordField.trailingAnchor.constraint(equalTo: checkHourlyHeartbeat.leadingAnchor, constant: -8),
             discordField.heightAnchor.constraint(equalToConstant: 22),
             
             // Status Label
@@ -374,7 +377,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             scroll.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -20),
         ])
         
-        updateModelSummary()
+        loadPreferences()
         
         appendLog("🍏 Apple Stock Monitor Initialized.\nRegions: UK & US supported • Browsers: Firefox, Safari, Chrome\nStorages: 256GB, 512GB, 1TB, 2TB • Colours: Night Sky, Star White\nSelect your parameters and click 'Start Monitoring', or '🧪 Test' to verify alerts.\n\n")
         
@@ -407,6 +410,70 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if postcodeField.stringValue == "10001" {
                 postcodeField.stringValue = "W1B 3AG"
             }
+        }
+        updateModelSummary()
+        savePreferences()
+    }
+    
+    @objc func preferenceChanged() {
+        updateModelSummary()
+        savePreferences()
+    }
+    
+    func savePreferences() {
+        let defaults = UserDefaults.standard
+        defaults.set(regionPopUp.indexOfSelectedItem, forKey: "savedRegion")
+        defaults.set(browserPopUp.indexOfSelectedItem, forKey: "savedBrowser")
+        defaults.set(postcodeField.stringValue, forKey: "savedLocation")
+        defaults.set(radiusField.stringValue, forKey: "savedRadius")
+        defaults.set(intervalField.stringValue, forKey: "savedInterval")
+        defaults.set(colorPopUp.indexOfSelectedItem, forKey: "savedColor")
+        defaults.set(check256.state == .on, forKey: "saved256")
+        defaults.set(check512.state == .on, forKey: "saved512")
+        defaults.set(check1tb.state == .on, forKey: "saved1tb")
+        defaults.set(check2tb.state == .on, forKey: "saved2tb")
+        defaults.set(checkHourlyHeartbeat.state == .on, forKey: "savedHourlyHeartbeat")
+        defaults.set(discordField.stringValue, forKey: "savedDiscord")
+    }
+    
+    func loadPreferences() {
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: "savedBrowser") != nil {
+            browserPopUp.selectItem(at: defaults.integer(forKey: "savedBrowser"))
+        }
+        if defaults.object(forKey: "savedRegion") != nil {
+            regionPopUp.selectItem(at: defaults.integer(forKey: "savedRegion"))
+            regionChanged()
+        }
+        if let loc = defaults.string(forKey: "savedLocation"), !loc.isEmpty {
+            postcodeField.stringValue = loc
+        }
+        if let rad = defaults.string(forKey: "savedRadius"), !rad.isEmpty {
+            radiusField.stringValue = rad
+        }
+        if let inv = defaults.string(forKey: "savedInterval"), !inv.isEmpty {
+            intervalField.stringValue = inv
+        }
+        if defaults.object(forKey: "savedColor") != nil {
+            colorPopUp.selectItem(at: defaults.integer(forKey: "savedColor"))
+        }
+        if defaults.object(forKey: "saved256") != nil {
+            check256.state = defaults.bool(forKey: "saved256") ? .on : .off
+        }
+        if defaults.object(forKey: "saved512") != nil {
+            check512.state = defaults.bool(forKey: "saved512") ? .on : .off
+        }
+        if defaults.object(forKey: "saved1tb") != nil {
+            check1tb.state = defaults.bool(forKey: "saved1tb") ? .on : .off
+        }
+        if defaults.object(forKey: "saved2tb") != nil {
+            check2tb.state = defaults.bool(forKey: "saved2tb") ? .on : .off
+        }
+        if defaults.object(forKey: "savedHourlyHeartbeat") != nil {
+            checkHourlyHeartbeat.state = defaults.bool(forKey: "savedHourlyHeartbeat") ? .on : .off
+        }
+        if let disc = defaults.string(forKey: "savedDiscord"), !disc.isEmpty {
+            discordField.stringValue = disc
         }
         updateModelSummary()
     }
@@ -484,6 +551,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func startMonitoring() {
+        savePreferences()
         let isUS = (regionPopUp.indexOfSelectedItem == 1)
         let country = isUS ? "us" : "uk"
         let browser = getBrowserArg()
@@ -491,10 +559,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let rad = radiusField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         let inv = intervalField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         let discord = discordField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hourly = (checkHourlyHeartbeat.state == .on)
         let skus = getSelectedSKUs()
         let script = resolvedScriptPath
         
-        let discordDisplay = discord.isEmpty ? "Disabled" : "Active"
+        let discordDisplay = discord.isEmpty ? "Disabled" : (hourly ? "Active (Hourly Heartbeat ON)" : "Active (Alerts Only)")
         appendLog("▶ Starting stock monitor (Region: \(country.uppercased()), Location: \(pc), Radius: \(rad) mi, Cadence: \(inv)s, Browser: \(browser.capitalized), Models: \(skus.count), Discord: \(discordDisplay))...\n")
         
         let p = Process()
@@ -506,9 +575,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             "--postcode", pc,
             "--distance", rad,
             "--interval", inv,
-            "--keep-monitoring",
-            "--parts"
+            "--keep-monitoring"
         ]
+        if hourly {
+            args.append("--hourly-ping")
+        } else {
+            args.append("--no-hourly-ping")
+        }
+        args.append("--parts")
         args.append(contentsOf: skus)
         if !discord.isEmpty {
             args.append(contentsOf: ["--discord", discord])
@@ -604,6 +678,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     @objc func runTest() {
+        savePreferences()
         let isUS = (regionPopUp.indexOfSelectedItem == 1)
         let country = isUS ? "us" : "uk"
         let browser = getBrowserArg()
@@ -649,6 +724,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func applicationWillTerminate(_ notification: Notification) {
+        savePreferences()
         stopMonitoring()
     }
 }

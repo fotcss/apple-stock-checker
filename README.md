@@ -1,5 +1,9 @@
 # 🍏 Apple Stock Monitor (UK & US)
 
+[![Vibe Coded](https://img.shields.io/badge/Vibe--Coded-100%25-ff69b4?style=for-the-badge&logo=sparkles)](https://github.com/fotcss/apple-stock-checker)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-macOS-000000?style=for-the-badge&logo=apple)](https://github.com/fotcss/apple-stock-checker)
+
 > **Real-time, multi-model inventory tracking for Apple Retail Stores across the UK and United States.**  
 > Automatically monitors pickup stock, launches your chosen browser (**Firefox**, **Safari**, or **Chrome**) straight to checkout, sounds voice alerts, and delivers high-priority Discord push notifications directly to your phone.
 
@@ -22,8 +26,10 @@
   Query multiple colours (*Night Sky*, *Star White*) and multiple storages (*256GB*, *512GB*, *1TB*, *2TB*) simultaneously in a **single HTTP/2 request** with zero extra latency or Akamai bot-challenge risk.
 - **📱 Instant Discord Phone Notifications:**
   - **Stock Drops:** Pings `@everyone` with loud sound, vibration, and a direct `[🛒 BUY NOW ON APPLE STORE]` link.
-  - **Hourly Status Reports:** Automatically sends a structured `@everyone` overview every 60 minutes showing active uptime, stores scanned, and total check count.
+  - **Hourly Status Heartbeat:** Sends a structured `@everyone` overview card every 60 minutes showing active uptime, stores scanned, and total check count (can be toggled on/off in the UI or CLI).
   - **Quiet Status Logs:** Logs startup, pause, network warnings, and rate-limit cooldowns quietly without pinging your phone.
+- **💾 Automatic Preference Persistence:**
+  Remembers your chosen browser, region, location, search radius, check interval, selected models, and Discord webhook across launches via macOS `UserDefaults`.
 - **🔊 Voice Announcements & Audio Alerts:**
   Speaks the in-stock store location aloud using macOS Text-to-Speech (`say`) alongside native system alert chimes.
 - **☕ Built-in System Sleep Prevention:**
@@ -92,8 +98,15 @@ python3 check_stock.py --country us --postcode 10001 --distance 30 --color night
 | `--storages` | `256GB` | Storages to check: `256GB`, `512GB`, `1TB`, `2TB` |
 | `--interval` | `45` | Check cadence in seconds |
 | `--discord` | `""` | Discord Webhook URL for instant phone push alerts |
+| `--hourly-ping` / `--no-hourly-ping` | `true` | Toggle hourly `@everyone` Discord status heartbeat |
 | `--test-browser`| `false` | Tests browser launch, voice chime, and Discord ping |
 | `--keep-monitoring`| `false` | Continue scanning after stock is detected |
+
+---
+
+## 🪄 100% Vibe-Coded
+
+This entire project — from the native Swift AppKit user interface and multithreaded backend engine to the cross-region SKU resolvers, Discord webhook payloads, and sleep assertions — was **100% vibe-coded** with AI pair-programming in Antigravity. Zero lines were manually written by hand; built entirely through natural language guidance, rapid iteration, and real-time visual testing.
 
 ---
 
